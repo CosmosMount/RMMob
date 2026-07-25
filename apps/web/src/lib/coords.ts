@@ -1,7 +1,7 @@
 export type Bounds = {
   xMin: number;
-  xMax: number;
   yMin: number;
+  xMax: number;
   yMax: number;
 };
 
@@ -14,19 +14,18 @@ export const DEFAULT_BOUNDS: Bounds = {
 };
 
 /**
- * Inset of the playable rectangle inside the top-view JPEG.
- * Fractions calibrated to match LADDER analysis.html FIELD_MAP
- * (pixel 80–2110 × 55–1145 on 2190×1202 → same ratios on our asset).
+ * Playable rectangle inside the field asset (white apron removed).
+ * Tiny inset keeps heat inside the black outer wall ring.
  */
 export const FIELD_IMAGE_INSET = {
-  left: 80 / 2190,
-  right: 80 / 2190,
-  top: 55 / 1202,
-  bottom: 57 / 1202,
+  left: 0.012,
+  right: 0.012,
+  top: 0.014,
+  bottom: 0.014,
 };
 
-/** Native field image aspect (1683 / 938). */
-export const FIELD_IMAGE_ASPECT = 1683 / 938;
+/** Cropped field asset aspect (1766 / 947). */
+export const FIELD_IMAGE_ASPECT = 1766 / 947;
 
 export function playableRect(width: number, height: number) {
   const { left, right, top, bottom } = FIELD_IMAGE_INSET;

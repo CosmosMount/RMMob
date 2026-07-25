@@ -3,6 +3,7 @@
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EventTimeline } from "@/components/match/EventTimeline";
+import { MatchBattleHud } from "@/components/match/MatchBattleHud";
 import { MatchHeader } from "@/components/match/MatchHeader";
 import { QuickStats } from "@/components/match/QuickStats";
 import { RobotCards } from "@/components/match/RobotCards";
@@ -159,7 +160,7 @@ function MatchRoundView({ gameId, matchKey }: { gameId: string; matchKey: string
   useEffect(() => {
     if (!detail) return;
     let cancelled = false;
-    const delay = t.isPlaying ? 400 : 80;
+    const delay = t.isPlaying ? 280 : 80;
     const handle = window.setTimeout(() => {
       api
         .round(gameId, t.currentSecond)
@@ -180,19 +181,41 @@ function MatchRoundView({ gameId, matchKey }: { gameId: string; matchKey: string
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, t.currentSecond, t.isPlaying]);
 
+  // Full-match heat when paused; cumulative live heat while playing
+  const heatBucket = t.isPlaying ? Math.floor(t.currentSecond / 2) * 2 : -1;
   useEffect(() => {
-    api
-      .heatmap(gameId, {
-        metric: "movement",
-        team: team || undefined,
-        robot_type: robotType || undefined,
-        robot_id: selectedRobot || undefined,
-        start: t.selectedTimeRange?.[0],
-        end: t.selectedTimeRange?.[1],
-      })
-      .then(setHeat)
-      .catch(() => {});
-  }, [gameId, team, robotType, selectedRobot, t.selectedTimeRange]);
+    let cancelled = false;
+    const delay = t.isPlaying ? 450 : 0;
+    const handle = window.setTimeout(() => {
+      api
+        .heatmap(gameId, {
+          metric: "movement",
+          team: team || undefined,
+          robot_type: robotType || undefined,
+          robot_id: selectedRobot || undefined,
+          start: t.selectedTimeRange?.[0],
+          end: t.isPlaying
+            ? t.currentSecond
+            : t.selectedTimeRange?.[1],
+        })
+        .then((h) => {
+          if (!cancelled) setHeat(h);
+        })
+        .catch(() => {});
+    }, delay);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [
+    gameId,
+    team,
+    robotType,
+    selectedRobot,
+    t.selectedTimeRange,
+    t.isPlaying,
+    heatBucket,
+  ]);
 
   const filteredEvents = events.filter((e) => {
     if (team && e.team !== team) return false;
@@ -218,6 +241,52 @@ function MatchRoundView({ gameId, matchKey }: { gameId: string; matchKey: string
     return true;
   });
 
+  const heatMode = t.isPlaying ? "live" : "full";
+
+  const mapBlock = (
+    <MatchBattleHud
+      robots={displayRobots}
+      selectedId={selectedRobot}
+      onSelect={setSelectedRobot}
+      heatMode={heatMode}
+    >
+      <div className="row" style={{ marginBottom: 8 }}>
+        <button
+          className={`btn ${layers.heat ? "active" : ""}`}
+          onClick={() =>
+            setLayers((l) => {
+              const heat = !l.heat;
+              return { ...l, heat, trails: heat ? false : l.trails };
+            })
+          }
+        >
+          Heatmap
+        </button>
+        <button
+          className={`btn ${layers.trails ? "active" : ""}`}
+          onClick={() => setLayers((l) => ({ ...l, trails: !l.trails }))}
+        >
+          Trails
+        </button>
+        <button
+          className={`btn ${layers.robots ? "active" : ""}`}
+          onClick={() => setLayers((l) => ({ ...l, robots: !l.robots }))}
+        >
+          Robots
+        </button>
+      </div>
+      <TacticalMap
+        robots={mapRobots}
+        trajectories={filteredTraj}
+        heatmapSamples={heat?.samples || []}
+        bounds={heat?.coordinate_bounds}
+        showHeatmap={layers.heat}
+        showTrails={layers.trails}
+        showRobots={layers.robots}
+      />
+    </MatchBattleHud>
+  );
+
   if (!detail) return <div className="panel skeleton" style={{ height: 240 }} />;
 
   return (
@@ -242,82 +311,12 @@ function MatchRoundView({ gameId, matchKey }: { gameId: string; matchKey: string
       {tab === "Summary" && (
         <div className="stack">
           <MomentumChart data={momentum} />
-          <div className="row">
-            <button
-              className={`btn ${layers.heat ? "active" : ""}`}
-              onClick={() =>
-                setLayers((l) => {
-                  const heat = !l.heat;
-                  return { ...l, heat, trails: heat ? false : l.trails };
-                })
-              }
-            >
-              Heatmap
-            </button>
-            <button
-              className={`btn ${layers.trails ? "active" : ""}`}
-              onClick={() => setLayers((l) => ({ ...l, trails: !l.trails }))}
-            >
-              Trails
-            </button>
-            <button
-              className={`btn ${layers.robots ? "active" : ""}`}
-              onClick={() => setLayers((l) => ({ ...l, robots: !l.robots }))}
-            >
-              Robots
-            </button>
-          </div>
-          <TacticalMap
-            robots={mapRobots}
-            trajectories={filteredTraj}
-            heatmapSamples={heat?.samples || []}
-            bounds={heat?.coordinate_bounds}
-            showHeatmap={layers.heat}
-            showTrails={layers.trails}
-            showRobots={layers.robots}
-          />
+          {mapBlock}
           <StatisticComparison bars={bars} />
         </div>
       )}
       {tab === "Momentum" && <MomentumChart data={momentum} />}
-      {tab === "Map" && (
-        <div className="stack">
-          <div className="row">
-            <button
-              className={`btn ${layers.heat ? "active" : ""}`}
-              onClick={() =>
-                setLayers((l) => {
-                  const heat = !l.heat;
-                  return { ...l, heat, trails: heat ? false : l.trails };
-                })
-              }
-            >
-              Heatmap
-            </button>
-            <button
-              className={`btn ${layers.trails ? "active" : ""}`}
-              onClick={() => setLayers((l) => ({ ...l, trails: !l.trails }))}
-            >
-              Trails
-            </button>
-            <button
-              className={`btn ${layers.robots ? "active" : ""}`}
-              onClick={() => setLayers((l) => ({ ...l, robots: !l.robots }))}
-            >
-              Robots
-            </button>
-          </div>
-          <TacticalMap
-            robots={mapRobots}
-            trajectories={filteredTraj}
-            heatmapSamples={heat?.samples || []}
-            bounds={heat?.coordinate_bounds}
-            showHeatmap={layers.heat}
-            showTrails={layers.trails}
-            showRobots={layers.robots}
-          />
-        </div>
-      )}
+      {tab === "Map" && mapBlock}
       {tab === "Robots" && (
         <RobotCards
           robots={displayRobots}

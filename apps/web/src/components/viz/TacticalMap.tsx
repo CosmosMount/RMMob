@@ -12,7 +12,7 @@ import { robotNumberLabel } from "@/lib/robotLabel";
 import type { HeatmapSample, RobotSnapshot } from "@/lib/types";
 import { useRoundTime } from "@/state/roundTime";
 
-const FIELD_SRC = "/field/rmuc_2026_field_top_view.jpeg";
+const FIELD_SRC = "/field/rmuc_2026_field_top_view.jpeg?v=nobg";
 
 type Traj = {
   robot_id: string;
