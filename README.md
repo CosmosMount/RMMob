@@ -109,14 +109,41 @@ python ingest.py \
 
 **每秒分项（红 − 蓝）：**
 
-| 符号 | 含义 |
-| --- | --- |
-| $h$ | 非建筑 $\sum(\mathrm{hp}/\mathrm{hp\_max})$ |
-| $d$ | $(\mathrm{acc}_\mathrm{R}-\mathrm{acc}_\mathrm{B})/200$ |
-| $e$ | $(\mathrm{gold}_\mathrm{R}-\mathrm{gold}_\mathrm{B})/500$ |
-| $g$ | 建筑 $\sum(\mathrm{hp}/\mathrm{hp\_max})$ |
-| $s$ | $(\mathrm{ammo}_{17+42,\mathrm{R}}-\mathrm{ammo}_{17+42,\mathrm{B}})/200$ |
-| $p$ | $-(|\bar{x}_\mathrm{R}-14|-|\bar{x}_\mathrm{B}-14|)/10$；缺坐标则为 $0$ |
+- $h$：非建筑
+
+```math
+\sum(\mathrm{hp}/\mathrm{hp_{max}})
+```
+
+- $d$：伤害压力差
+
+```math
+(\mathrm{acc}_{R}-\mathrm{acc}_{B})/200
+```
+
+- $e$：金币差
+
+```math
+(\mathrm{gold}_{R}-\mathrm{gold}_{B})/500
+```
+
+- $g$：建筑
+
+```math
+\sum(\mathrm{hp}/\mathrm{hp_{max}})
+```
+
+- $s$：弹药差
+
+```math
+(\mathrm{ammo}_{17+42,R}-\mathrm{ammo}_{17+42,B})/200
+```
+
+- $p$：场地中线压迫（缺坐标则为 $0$）
+
+```math
+-(|\bar{x}_{R}-14|-|\bar{x}_{B}-14|)/10
+```
 
 **原始分：**
 
