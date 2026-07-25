@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rmmob-postgres
+    environment:
+      POSTGRES_USER: rmmob
+      POSTGRES_PASSWORD: rmmob
+      POSTGRES_DB: rmmob
+    ports:
+      - "5432:5432"
+    volumes:
+      - .postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rmmob -d rmmob"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

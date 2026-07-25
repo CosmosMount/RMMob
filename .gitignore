@@ -1,0 +1,26 @@
+rmuc_2026_region_dataset/
+.agents/
+
+# Dependencies & envs
+node_modules/
+.next/
+out/
+dist/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.env.local
+*.log
+
+# Tooling
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Runtime outputs
+outputs/
+.postgres-data/
