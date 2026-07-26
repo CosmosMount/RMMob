@@ -63,9 +63,13 @@ export type RoundDetail = {
 
 export type MomentumPoint = {
   second: number;
+  /** Signed net (红 − 蓝). */
   raw: number;
   bounded: number;
   smoothed: number;
+  /** Per-team strength (≥0 after smooth); both sides always chartable. */
+  red_smoothed?: number;
+  blue_smoothed?: number;
   dominant_factor: string | null;
   contributions: Record<string, number>;
 };

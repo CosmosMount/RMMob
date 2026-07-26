@@ -100,7 +100,9 @@ python ingest.py \
 ### 1. Momentum（局内局势）
 
 - **代码：** `apps/web/src/server/momentum.ts`（原 Python：`services/api/app/services/momentum.py`）
-- **版本：** `momentum-v1.0`
+- **版本：** `momentum-v1.2`
+
+…（权重同 v1.1）另输出每队绝对强度 `red_smoothed` / `blue_smoothed`，图表上下同时填充，细线仍为净优势 $R-B$。旧 Demo 无该字段时回退为单侧净优势填充。
 - **符号：** 红方优势为正，蓝方为负。基地 / 前哨只进 objective，不进地面 HP / 弹药。
 
 **伤害压力（递推）：** 对事件 `受击`、`飞镖命中`，受害方的对手累加压力 $p_t$，再：
@@ -147,12 +149,19 @@ python ingest.py \
 -(|\bar{x}_{R}-14|-|\bar{x}_{B}-14|)/10
 ```
 
-**原始分：**
+- $m$：向前推进（机动单位相对上一秒的平均 $\Delta x$，红向 $+x$、蓝向 $-x$，单车截断 $\pm 2.5\,\mathrm{m}$；缺上一拍则为 $0$）
 
 ```math
-\mathrm{raw} = 0.35h + 0.25d + 0.1e + 0.1p + 0.1g + 0.05s
+(\bar{\Delta}_{R}-\bar{\Delta}_{B})/1.5
 ```
 
+**原始分（`momentum-v1.1`）：**
+
+```math
+\mathrm{raw} = 0.3h + 0.22d + 0.08e + 0.18p + 0.12m + 0.08g + 0.02s
+```
+
+相对 v1.0：中线压迫权重 $0.1\to 0.18$，新增运动推进项 $0.12$，略降 HP / 伤害等以腾出权重。
 **平滑：** 用中位数与 MAD 做稳健标准化，截断到 $\pm 3$，再 EMA（$\alpha=0.2$）：
 
 ```math
