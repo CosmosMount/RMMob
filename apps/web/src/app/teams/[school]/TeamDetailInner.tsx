@@ -1,11 +1,21 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MatchRow } from "@/components/match/MatchRow";
 import { SchoolCrest } from "@/components/match/SchoolCrest";
 import { api } from "@/lib/api";
 import type { MatchGroup } from "@/lib/types";
+
+type TeamRobot = {
+  school: string;
+  region: string;
+  robot_type: string;
+  slug: string;
+  kda: string;
+  ladder_score: number;
+};
 
 export default function TeamDetailInner() {
   const params = useParams<{ school: string }>();
@@ -19,12 +29,16 @@ export default function TeamDetailInner() {
     region_counts: Record<string, number>;
     recent_matches: MatchGroup[];
   } | null>(null);
+  const [robots, setRobots] = useState<TeamRobot[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .team(school)
-      .then(setData)
+    setError(null);
+    Promise.all([api.team(school), api.teamRobots(school).catch(() => ({ items: [] as TeamRobot[] }))])
+      .then(([team, roster]) => {
+        setData(team);
+        setRobots(roster.items || []);
+      })
       .catch((e) => setError(String(e)));
   }, [school]);
 
@@ -57,6 +71,36 @@ export default function TeamDetailInner() {
           ))}
         </div>
       </section>
+
+      <h2 className="page-title" style={{ fontSize: 16 }}>
+        Robots
+      </h2>
+      <div className="panel-list">
+        {robots.map((r) => (
+          <Link
+            key={r.slug}
+            href={`/teams/${encodeURIComponent(school)}/robots/${encodeURIComponent(r.slug)}`}
+            className="match-row"
+          >
+            <div className="row" style={{ justifyContent: "space-between", width: "100%" }}>
+              <div>
+                <strong>{r.robot_type}</strong>
+                <div className="muted" style={{ fontSize: 13 }}>
+                  {r.region}
+                </div>
+              </div>
+              <div className="muted" style={{ fontSize: 13, textAlign: "right" }}>
+                <div>KDA {r.kda}</div>
+                <div className="num">K+0.4A {r.ladder_score}</div>
+              </div>
+            </div>
+          </Link>
+        ))}
+        {!robots.length && (
+          <div className="empty">No season robot stats for this school</div>
+        )}
+      </div>
+
       <h2 className="page-title" style={{ fontSize: 16 }}>
         Recent matches
       </h2>

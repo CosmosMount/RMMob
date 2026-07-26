@@ -50,7 +50,7 @@ const TYPE_FIELDS: Record<string, string[]> = {
     "matchLargeEnergyActRoundsAvg",
   ],
   Hero: ["eaBigHitRate", "eagHurt", "gkDamage", "eaKDA", "eaSnipeCnt", "gKillCount"],
-  Sapper: ["eaExchangeEcon", "avgMineTime", "avgMineDiff", "eaAssembleEcon", "eaAssembleSuccCnt"],
+  Sapper: ["avgAssembleDiff", "eaAssembleEcon", "eaAssembleSuccCnt"],
   Airplane: ["eaSmallHitRate", "eagHurt", "gkDamage", "eaKDA", "avgShootNum", "gKillCount"],
   Guard: ["eaSmallHitRate", "eagHurt", "gkDamage", "eaKDA", "gKillCount"],
   Radar: ["eaRadarMarkerTime", "eaRadarDebuffDmg", "eaRadarParseSuccCnt", "eaRadarCounterTime"],
@@ -68,12 +68,15 @@ const TYPE_FIELDS: Record<string, string[]> = {
 const LADDER_FIELDS: Record<string, { field: string; label: string }> = {
   Infantry: { field: "ladder_score", label: "K+0.4A" },
   Hero: { field: "gkDamage", label: "关键伤害" },
-  Sapper: { field: "eaExchangeEcon", label: "兑换经济" },
+  Sapper: { field: "avgAssembleDiff", label: "兑矿等级" },
   Airplane: { field: "eagHurt", label: "造成伤害" },
   Guard: { field: "eagHurt", label: "造成伤害" },
   Radar: { field: "eaRadarMarkerTime", label: "雷达标记时长" },
   Dart: { field: "gkDamage", label: "关键伤害" },
 };
+
+/** Types where KDA / K+0.4A ladder_score is meaningful. */
+const USES_KDA = new Set(["Infantry", "Hero", "Airplane", "Guard"]);
 
 const FIELD_LABELS: Record<string, string> = {
   eaKDA: "KDA",
@@ -89,17 +92,18 @@ const FIELD_LABELS: Record<string, string> = {
   eaExchangeEcon: "兑换经济",
   avgMineTime: "采矿耗时",
   avgMineDiff: "采矿难度",
+  avgAssembleDiff: "兑矿等级",
   eaAssembleEcon: "装配经济",
   eaAssembleSuccCnt: "装配成功",
   eaRadarMarkerTime: "标记时长",
   eaRadarDebuffDmg: "易伤伤害",
   eaRadarParseSuccCnt: "解析成功",
   eaRadarCounterTime: "反制时长",
-  etDartOutpostCnt: "飞镖前哨",
-  etDartFixedCnt: "飞镖固定",
-  etDartRDFixCnt: "飞镖固定命中",
-  etDartRDMoveCnt: "飞镖移动命中",
-  etDartEndMoveCnt: "飞镖终点移动",
+  etDartOutpostCnt: "前哨",
+  etDartFixedCnt: "固定",
+  etDartRDFixCnt: "随机固定",
+  etDartRDMoveCnt: "随机移动",
+  etDartEndMoveCnt: "末端移动",
   kills: "K",
   deaths: "D",
   assists: "A",
@@ -196,6 +200,7 @@ export function getRankings(
 ) {
   const { region, zoneId, sortBy, limit = 80 } = opts;
   const typeKey = resolveType(robotType);
+  // Season ladder: treat 步兵 / 步兵3 / 步兵4 as one Infantry bucket.
   const fields = [...(TYPE_FIELDS[typeKey] || ["eaKDA"])];
   const defaultSort = LADDER_FIELDS[typeKey]?.field || "ladder_score";
   const sortField = sortBy || defaultSort;
@@ -223,10 +228,7 @@ export function getRankings(
     metrics.kills = k;
     metrics.deaths = d;
     metrics.assists = a;
-    let label = TYPE_LABELS[typeKey] || typeKey;
-    if (typeKey === "Infantry" && robot.robotNumber != null) {
-      label = `步兵${robot.robotNumber}`;
-    }
+    const label = TYPE_LABELS[typeKey] || typeKey;
     rows.push({
       school: item.school,
       team_name: item.team_name,
@@ -260,7 +262,14 @@ export function getRankings(
     r.rank = i + 1;
   });
 
-  const allFields = fields.includes("ladder_score") ? fields : [...fields, "ladder_score"];
+  const baseFields = [...fields];
+  const allFields =
+    USES_KDA.has(typeKey) && !baseFields.includes("ladder_score")
+      ? [...baseFields, "ladder_score"]
+      : baseFields;
+  const labelKeys = USES_KDA.has(typeKey)
+    ? [...allFields, "kills", "deaths", "assists"]
+    : allFields;
   return {
     robot_type: TYPE_LABELS[typeKey] || typeKey,
     robot_type_key: typeKey,
@@ -268,12 +277,7 @@ export function getRankings(
     sort_by: sortField,
     sort_label: FIELD_LABELS[sortField] || LADDER_FIELDS[typeKey]?.label || sortField,
     fields: allFields,
-    field_labels: Object.fromEntries(
-      [...fields, "ladder_score", "kills", "deaths", "assists"].map((f) => [
-        f,
-        FIELD_LABELS[f] || f,
-      ])
-    ),
+    field_labels: Object.fromEntries(labelKeys.map((f) => [f, FIELD_LABELS[f] || f])),
     model_version: MODEL_VERSION,
     source: "LADDER robot_data_2026.json (official season aggregates)",
     items: limited,
@@ -374,4 +378,129 @@ export function listSchoolsForType(robotType: string, q?: string | null, limit =
     if (names.length >= limit) break;
   }
   return names;
+}
+
+function schoolMatches(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+function formatRobotLabel(typeKey: string, _robot: Record<string, unknown>): string {
+  // LADDER treats infantry as one bucket (no 步兵3/4 season split).
+  return TYPE_LABELS[typeKey] || typeKey;
+}
+
+/** Parse URL slug like 英雄 / 步兵3 / Hero into type key + optional infantry number. */
+export function parseRobotSlug(slug: string): { typeKey: string; robotNumber: number | null; label: string } {
+  const raw = decodeURIComponent(slug).trim();
+  const m = /^步兵\s*([34])$/.exec(raw) || /^Infantry[_-]?([34])$/i.exec(raw);
+  if (m) {
+    return { typeKey: "Infantry", robotNumber: Number(m[1]), label: `步兵${m[1]}` };
+  }
+  const typeKey = resolveType(raw);
+  return { typeKey, robotNumber: null, label: TYPE_LABELS[typeKey] || raw };
+}
+
+function enrichRobotRow(
+  item: {
+    school: string;
+    zoneName: string;
+    zoneId: string;
+    logo?: string | null;
+    team_name: string;
+    robot: Record<string, unknown>;
+  },
+  rankHint?: number | null
+) {
+  const typeKey = String(item.robot.type || "");
+  const fields = [...(TYPE_FIELDS[typeKey] || ["eaKDA"])];
+  const [k, d, a] = parseKda(item.robot.eaKDA);
+  const score = kdaScore(item.robot.eaKDA);
+  const label = formatRobotLabel(typeKey, item.robot);
+  const metrics: Record<string, unknown> = {};
+  for (const f of fields) metrics[f] = item.robot[f];
+  metrics.ladder_score = Math.round(score * 1000) / 1000;
+  metrics.kills = k;
+  metrics.deaths = d;
+  metrics.assists = a;
+
+  return {
+    school: item.school,
+    region: item.zoneName,
+    zone_id: item.zoneId,
+    logo: item.logo,
+    team_name: item.team_name,
+    robot_type: label,
+    robot_type_key: typeKey,
+    robot_number: item.robot.robotNumber ?? null,
+    slug: label,
+    kda: `${formatG(k)}/${formatG(d)}/${formatG(a)}`,
+    ladder_score: Math.round(score * 1000) / 1000,
+    rank: rankHint ?? null,
+    fields: fields.includes("ladder_score") ? fields : [...fields, "ladder_score"],
+    field_labels: Object.fromEntries(
+      [...fields, "ladder_score", "kills", "deaths", "assists"].map((f) => [
+        f,
+        FIELD_LABELS[f] || f,
+      ])
+    ),
+    metrics,
+    model_version: MODEL_VERSION,
+    source: "LADDER robot_data_2026.json (official season aggregates)",
+  };
+}
+
+/** All LADDER robots for a school (fuzzy name match). */
+export function getTeamRobotRoster(school: string) {
+  const items = [];
+  for (const item of iterRobots()) {
+    if (!schoolMatches(item.school, school)) continue;
+    items.push(enrichRobotRow(item));
+  }
+  // Prefer exact college name first, then fuzzy
+  const exact = items.filter((r) => r.school === school);
+  const use = exact.length ? exact : items;
+  // Dedupe by type key (Infantry is one LADDER slot, not 3/4)
+  const seen = new Set<string>();
+  const deduped = [];
+  for (const r of use) {
+    const key = String(r.robot_type_key);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(r);
+  }
+  deduped.sort((a, b) => String(a.robot_type_key).localeCompare(String(b.robot_type_key)));
+  return {
+    school,
+    model_version: MODEL_VERSION,
+    items: deduped,
+  };
+}
+
+/** One robot under a school: season metrics + approximate type rank. */
+export function getTeamRobotDetail(school: string, robotSlug: string) {
+  const { typeKey, robotNumber, label } = parseRobotSlug(robotSlug);
+  const ranking = getRankings(TYPE_LABELS[typeKey] || typeKey, { limit: 500 });
+
+  let matched: ReturnType<typeof enrichRobotRow> | null = null;
+  for (const item of iterRobots()) {
+    if (!schoolMatches(item.school, school)) continue;
+    if (String(item.robot.type) !== typeKey) continue;
+    if (robotNumber != null && Number(item.robot.robotNumber) !== robotNumber) continue;
+    matched = enrichRobotRow(item);
+    if (item.school === school) break;
+  }
+  if (!matched) return null;
+
+  // Rank among same type (and number for infantry when present)
+  let rank: number | null = null;
+  for (const row of ranking.items) {
+    if (!schoolMatches(String(row.school), matched.school)) continue;
+    if (robotNumber != null && Number(row.robot_number) !== robotNumber) continue;
+    rank = Number(row.rank);
+    break;
+  }
+  matched.rank = rank;
+
+  return matched;
 }

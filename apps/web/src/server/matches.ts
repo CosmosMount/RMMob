@@ -130,37 +130,38 @@ export function listRegions(): string[] {
   return rows.map((r) => String(r.region));
 }
 
-export function listSchools(q?: string | null, limit = 40): string[] {
-  if (q) {
-    const like = `%${q}%`;
-    const rows = fetchAll<{ school: string }>(
-      `
-      SELECT school FROM (
-        SELECT DISTINCT ${col("red_school")} AS school FROM matches
-        UNION
-        SELECT DISTINCT ${col("blue_school")} AS school FROM matches
-      ) t
-      WHERE school LIKE ?
-      ORDER BY school
-      LIMIT ?
-      `,
-      [like, limit]
-    );
-    return rows.map((r) => String(r.school));
-  }
-  const rows = fetchAll<{ school: string }>(
-    `
+export function listSchools(
+  q?: string | null,
+  limit = 40,
+  offset = 0
+): { items: string[]; total: number } {
+  const like = q ? `%${q}%` : null;
+  const baseFrom = `
     SELECT school FROM (
       SELECT DISTINCT ${col("red_school")} AS school FROM matches
       UNION
       SELECT DISTINCT ${col("blue_school")} AS school FROM matches
     ) t
-    ORDER BY school
-    LIMIT ?
-    `,
-    [limit]
+  `;
+  const where = like ? "WHERE school LIKE ?" : "";
+  const countRow = fetchAll<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM (${baseFrom} ${where}) c`,
+    like ? [like] : []
   );
-  return rows.map((r) => String(r.school));
+  const total = Number(countRow[0]?.n ?? 0);
+  const rows = fetchAll<{ school: string }>(
+    `
+    ${baseFrom}
+    ${where}
+    ORDER BY school
+    LIMIT ? OFFSET ?
+    `,
+    like ? [like, limit, offset] : [limit, offset]
+  );
+  return {
+    total,
+    items: rows.map((r) => String(r.school)),
+  };
 }
 
 export function schoolStandings(limit = 15) {

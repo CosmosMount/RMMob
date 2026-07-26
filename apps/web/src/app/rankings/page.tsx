@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { SchoolCrest } from "@/components/match/SchoolCrest";
 import { api } from "@/lib/api";
-import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 const TYPES = ["英雄", "工程", "步兵", "空中", "哨兵", "雷达", "飞镖"];
 
@@ -20,8 +21,12 @@ type RankItem = {
   metrics: Record<string, number | string | null>;
 };
 
-export default function RankingsPage() {
-  const [robotType, setRobotType] = useState("英雄");
+function RankingsInner() {
+  const search = useSearchParams();
+  const initialType = search.get("type") || "英雄";
+  const [robotType, setRobotType] = useState(
+    TYPES.includes(initialType) ? initialType : "英雄"
+  );
   const [region, setRegion] = useState("");
   const [zones, setZones] = useState<Array<{ zoneId: string; zoneName: string }>>([]);
   const [sortBy, setSortBy] = useState<string | undefined>(undefined);
@@ -62,16 +67,19 @@ export default function RankingsPage() {
   const columns = useMemo(() => {
     if (!data) return [] as string[];
     const fields = data.fields ?? [];
-    const prefer = ["ladder_score", "eaKDA", "eagHurt", "gkDamage", "gKillCount"];
-    if (!fields.length) return prefer;
-    const rest = fields.filter((f) => !prefer.includes(f));
-    const cols = [
-      "ladder_score",
-      "eaKDA",
-      ...prefer.filter((f) => f !== "ladder_score" && f !== "eaKDA" && fields.includes(f)),
-      ...rest.filter((f) => f !== "eaKDA"),
-    ];
-    return Array.from(new Set(cols)).slice(0, 6);
+    if (!fields.length) return [];
+    const sort = data.sort_by;
+    const ordered: string[] = [];
+    if (sort && fields.includes(sort)) ordered.push(sort);
+    for (const f of fields) {
+      if (f === sort) continue;
+      if (f === "ladder_score") {
+        ordered.push("ladder_score", "eaKDA");
+        continue;
+      }
+      ordered.push(f);
+    }
+    return Array.from(new Set(ordered)).slice(0, 6);
   }, [data]);
 
   return (
@@ -166,5 +174,13 @@ export default function RankingsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function RankingsPage() {
+  return (
+    <Suspense fallback={<div className="panel skeleton" style={{ height: 160 }} />}>
+      <RankingsInner />
+    </Suspense>
   );
 }

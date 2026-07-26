@@ -15,6 +15,7 @@ type RankItem = {
   gkDamage: number | null;
   eagHurt: number | null;
   robot_type: string;
+  metrics?: Record<string, number | string | null>;
 };
 
 export function HomeTypeRankPanel() {
@@ -45,8 +46,15 @@ export function HomeTypeRankPanel() {
     if ((robotType === "空中" || robotType === "哨兵") && it.eagHurt != null) {
       return `伤害 ${Math.round(it.eagHurt)}`;
     }
-    if (it.kda && it.kda !== "0/0/0") return it.kda;
-    if (it.ladder_score != null) return `分 ${it.ladder_score}`;
+    if (robotType === "工程") {
+      const lvl = it.metrics?.avgAssembleDiff;
+      const econ = it.metrics?.eaAssembleEcon;
+      if (typeof lvl === "number") {
+        return `兑矿 ${lvl.toFixed(1)}${typeof econ === "number" ? ` · 经济 ${Math.round(econ)}` : ""}`;
+      }
+    }
+    if (it.kda && it.kda !== "0/0/0" && !it.kda.startsWith("0.0/")) return it.kda;
+    if (it.ladder_score != null && robotType !== "工程") return `分 ${it.ladder_score}`;
     return it.robot_type || "—";
   }
 

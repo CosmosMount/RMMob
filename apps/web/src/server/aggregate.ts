@@ -3,8 +3,6 @@ import { fetchAll } from "./db";
 import { listMatches } from "./matches";
 import { col } from "./sqlMap";
 
-let robotIndexCache: { limit: number; items: Array<Record<string, unknown>> } | null = null;
-
 export function getTeam(school: string) {
   const { items: groups } = listMatches({ school, limit: 200, offset: 0 });
   if (!groups.length) return null;
@@ -39,10 +37,16 @@ export function getTeam(school: string) {
   };
 }
 
-export function listRobotIndex(limit = 100) {
-  if (robotIndexCache && robotIndexCache.limit === limit) {
-    return robotIndexCache.items;
-  }
+let robotIndexCache: Array<{
+  school: string;
+  robot_type: string;
+  region: string;
+  rounds: number;
+  key: string;
+}> | null = null;
+
+function loadRobotIndexAll() {
+  if (robotIndexCache) return robotIndexCache;
   const rows = fetchAll<{
     school: string;
     robot_type: string;
@@ -57,24 +61,29 @@ export function listRobotIndex(limit = 100) {
       COUNT(DISTINCT ${col("game_id")}) AS rounds
     FROM timeseries
     WHERE ${col("game_id")} IN (
-      SELECT ${col("game_id")} FROM matches LIMIT 200
+      SELECT ${col("game_id")} FROM matches LIMIT 400
     )
       AND ${col("robot_type")} NOT IN ('基地', '前哨站')
     GROUP BY ${col("school")}, ${col("robot_type")}, ${col("region")}
     ORDER BY rounds DESC
-    LIMIT ?
-    `,
-    [limit]
+    `
   );
-  const items = rows.map((r) => ({
+  robotIndexCache = rows.map((r) => ({
     school: String(r.school),
     robot_type: String(r.robot_type),
     region: String(r.region),
     rounds: Number(r.rounds),
     key: `${r.school}|${r.robot_type}|${r.region}`,
   }));
-  robotIndexCache = { limit, items };
-  return items;
+  return robotIndexCache;
+}
+
+export function listRobotIndex(limit = 40, offset = 0) {
+  const all = loadRobotIndexAll();
+  return {
+    total: all.length,
+    items: all.slice(offset, offset + limit),
+  };
 }
 
 export function analyticsOverview() {

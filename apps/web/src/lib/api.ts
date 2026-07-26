@@ -31,8 +31,15 @@ export const api = {
     );
   },
   regions: () => get<{ items: string[] }>("/matches/regions"),
-  schools: (q?: string) =>
-    get<{ items: string[] }>(`/matches/schools${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  schools: (q?: string | { q?: string; limit?: number; offset?: number }) => {
+    const opts = typeof q === "string" || q == null ? { q: q || undefined } : q;
+    const sp = new URLSearchParams();
+    if (opts.q) sp.set("q", opts.q);
+    if (opts.limit != null) sp.set("limit", String(opts.limit));
+    if (opts.offset != null) sp.set("offset", String(opts.offset));
+    const qs = sp.toString();
+    return get<{ items: string[]; total: number }>(`/matches/schools${qs ? `?${qs}` : ""}`);
+  },
   standings: (limit = 12) =>
     get<{
       items: Array<{
@@ -103,6 +110,39 @@ export const api = {
       region_counts: Record<string, number>;
       recent_matches: import("./types").MatchGroup[];
     }>(`/teams/${encodeURIComponent(school)}`),
+  teamRobots: (school: string) =>
+    get<{
+      school: string;
+      model_version: string;
+      items: Array<{
+        school: string;
+        region: string;
+        robot_type: string;
+        robot_type_key: string;
+        robot_number: number | null;
+        slug: string;
+        kda: string;
+        ladder_score: number;
+        metrics: Record<string, number | string | null>;
+      }>;
+    }>(`/teams/${encodeURIComponent(school)}/robots`),
+  teamRobot: (school: string, robotType: string) =>
+    get<{
+      school: string;
+      region: string;
+      robot_type: string;
+      robot_type_key: string;
+      robot_number: number | null;
+      slug: string;
+      kda: string;
+      ladder_score: number;
+      rank: number | null;
+      fields: string[];
+      field_labels: Record<string, string>;
+      metrics: Record<string, number | string | null>;
+      model_version: string;
+      source: string;
+    }>(`/teams/${encodeURIComponent(school)}/robots/${encodeURIComponent(robotType)}`),
   rankings: (robotType: string, region?: string, sortBy?: string) => {
     const sp = new URLSearchParams({ robot_type: robotType });
     if (region) sp.set("region", region);
@@ -163,16 +203,6 @@ export const api = {
       model_version: string;
     }>(`/compare?${sp}`);
   },
-  robots: () =>
-    get<{
-      items: Array<{
-        school: string;
-        robot_type: string;
-        region: string;
-        rounds: number;
-        key: string;
-      }>;
-    }>("/robots"),
   analytics: () => get<{ regions: Array<{ region: string; rounds: number }>; notes: string[] }>(
     "/analytics/overview"
   ),

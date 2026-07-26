@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
-  return ok({
-    items: listSchools(sp.get("q"), Math.min(200, Math.max(1, numParam(sp.get("limit"), 40)))),
-  });
+  const limit = Math.min(200, Math.max(1, numParam(sp.get("limit"), 40)));
+  const offset = Math.max(0, numParam(sp.get("offset"), 0));
+  return ok(listSchools(sp.get("q"), limit, offset));
 }

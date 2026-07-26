@@ -11,6 +11,8 @@ type Props = {
   /** Allow clearing selection */
   allowClear?: boolean;
   className?: string;
+  /** Custom school list (e.g. ranking schools for a robot type). */
+  loadOptions?: (query: string) => Promise<string[]>;
 };
 
 /**
@@ -22,6 +24,7 @@ export function SchoolCombobox({
   placeholder = "Search school…",
   allowClear = true,
   className,
+  loadOptions,
 }: Props) {
   const id = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -30,7 +33,6 @@ export function SchoolCombobox({
   const [items, setItems] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Sync external value → input when parent resets
   useEffect(() => {
     setQuery(value);
   }, [value]);
@@ -39,14 +41,17 @@ export function SchoolCombobox({
     if (!open) return;
     setLoading(true);
     const t = window.setTimeout(() => {
-      api
-        .schools(query.trim() || undefined)
-        .then((r) => setItems(r.items))
+      const q = query.trim();
+      const req = loadOptions
+        ? loadOptions(q)
+        : api.schools({ q: q || undefined, limit: 40 }).then((r) => r.items);
+      req
+        .then(setItems)
         .catch(() => setItems([]))
         .finally(() => setLoading(false));
     }, 160);
     return () => clearTimeout(t);
-  }, [query, open]);
+  }, [query, open, loadOptions]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -83,8 +88,6 @@ export function SchoolCombobox({
           onChange={(e) => {
             setQuery(e.target.value);
             setOpen(true);
-            // Live filter matches as user types (partial school name)
-            onChange(e.target.value);
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={(e) => {

@@ -1,9 +1,10 @@
 "use client";
 
 import { SchoolCrest } from "@/components/match/SchoolCrest";
+import { SchoolCombobox } from "@/components/ui/SchoolCombobox";
 import { api } from "@/lib/api";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 const TYPES = ["英雄", "工程", "步兵", "空中", "哨兵", "雷达", "飞镖"];
 const SLOT_COLORS = ["#6fcf97", "#5b8def", "#e85d5d", "#f2c94c"];
@@ -11,20 +12,18 @@ const SLOT_COLORS = ["#6fcf97", "#5b8def", "#e85d5d", "#f2c94c"];
 function CompareInner() {
   const search = useSearchParams();
   const initialType = search.get("type") || "英雄";
-  const [robotType, setRobotType] = useState(initialType);
+  const [robotType, setRobotType] = useState(
+    TYPES.includes(initialType) ? initialType : "英雄"
+  );
   const [slots, setSlots] = useState<string[]>(["", ""]);
-  const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [result, setResult] = useState<Awaited<ReturnType<typeof api.compare>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      api.rankingSchools(robotType, query || undefined).then((r) => setSuggestions(r.items)).catch(() => {});
-    }, 150);
-    return () => clearTimeout(t);
-  }, [robotType, query]);
+  const loadOptions = useCallback(
+    (q: string) => api.rankingSchools(robotType, q || undefined).then((r) => r.items),
+    [robotType]
+  );
 
   const selected = useMemo(() => slots.filter(Boolean), [slots]);
 
@@ -45,6 +44,8 @@ function CompareInner() {
   function setSlot(i: number, school: string) {
     setSlots((prev) => {
       const next = [...prev];
+      // Avoid duplicate schools across slots
+      if (school && next.some((s, j) => j !== i && s === school)) return prev;
       next[i] = school;
       return next;
     });
@@ -57,16 +58,25 @@ function CompareInner() {
         <p className="page-sub muted">Pick a robot type and 2–4 schools · official season metrics</p>
       </div>
 
-      <div className="panel row">
-        {TYPES.map((t) => (
-          <button
-            key={t}
-            className={`btn ${robotType === t ? "active" : ""}`}
-            onClick={() => setRobotType(t)}
-          >
-            {t}
-          </button>
-        ))}
+      <div className="panel row" style={{ alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+        <label className="muted" style={{ fontSize: 13 }}>
+          Robot type
+        </label>
+        <select
+          className="input"
+          value={robotType}
+          onChange={(e) => {
+            setRobotType(e.target.value);
+            setSlots((s) => s.map(() => ""));
+          }}
+          style={{ maxWidth: 200 }}
+        >
+          {TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="panel stack">
@@ -74,63 +84,47 @@ function CompareInner() {
           <strong>Schools</strong>
           <div className="row">
             {slots.length < 4 && (
-              <button className="btn" onClick={() => setSlots((s) => [...s, ""])}>
+              <button className="btn" type="button" onClick={() => setSlots((s) => [...s, ""])}>
                 + Slot
               </button>
             )}
             {slots.length > 2 && (
-              <button className="btn" onClick={() => setSlots((s) => s.slice(0, -1))}>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setSlots((s) => s.slice(0, -1))}
+              >
                 − Slot
               </button>
             )}
           </div>
         </div>
-        <input
-          className="input"
-          placeholder="Search schools to fill slots"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div className="row">
-          {suggestions.slice(0, 12).map((s) => (
-            <button
-              key={s}
-              className="btn"
-              onClick={() => {
-                const empty = slots.findIndex((x) => !x);
-                if (empty >= 0) setSlot(empty, s);
-                else if (slots.length < 4) setSlots([...slots, s]);
+
+        {slots.map((s, i) => (
+          <div key={i} className="row" style={{ gap: 10, alignItems: "center" }}>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 99,
+                flexShrink: 0,
+                background: SLOT_COLORS[i % SLOT_COLORS.length],
               }}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-        <div className="row">
-          {slots.map((s, i) => (
-            <div key={i} className="row" style={{ gap: 8 }}>
-              <span
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: 99,
-                  background: SLOT_COLORS[i % SLOT_COLORS.length],
-                }}
+            />
+            <span className="muted" style={{ width: 48, fontSize: 13 }}>
+              Slot {i + 1}
+            </span>
+            <div style={{ flex: 1, minWidth: 200, maxWidth: 420 }}>
+              <SchoolCombobox
+                value={s}
+                onChange={(school) => setSlot(i, school)}
+                placeholder={`Select school ${i + 1}…`}
+                loadOptions={loadOptions}
               />
-              {s ? (
-                <>
-                  <SchoolCrest school={s} size={28} />
-                  <span>{s}</span>
-                  <button className="text-btn" onClick={() => setSlot(i, "")}>
-                    clear
-                  </button>
-                </>
-              ) : (
-                <span className="muted">Slot {i + 1} empty</span>
-              )}
             </div>
-          ))}
-        </div>
+            {s ? <SchoolCrest school={s} size={28} /> : null}
+          </div>
+        ))}
       </div>
 
       {error && <div className="panel empty">{error}</div>}
