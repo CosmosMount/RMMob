@@ -2,19 +2,17 @@ import Link from "next/link";
 import { HomeTypeRankPanel } from "@/components/home/HomeTypeRankPanel";
 import { MatchRow } from "@/components/match/MatchRow";
 import { SchoolCrest } from "@/components/match/SchoolCrest";
-import { api } from "@/lib/api";
+import { listMatches, schoolStandings } from "@/server/matches";
 
 export default async function HomePage() {
-  let matches: Awaited<ReturnType<typeof api.matches>> | null = null;
-  let standings: Awaited<ReturnType<typeof api.standings>> | null = null;
+  let matches: ReturnType<typeof listMatches> | null = null;
+  let standings: { items: ReturnType<typeof schoolStandings> } | null = null;
 
   try {
-    [matches, standings] = await Promise.all([
-      api.matches({ limit: 16 }),
-      api.standings(12),
-    ]);
+    matches = listMatches({ limit: 16 });
+    standings = { items: schoolStandings(12) };
   } catch {
-    /* API may be down */
+    /* SQLite may be missing */
   }
 
   return (
@@ -71,7 +69,7 @@ export default async function HomePage() {
             全部赛程
           </Link>
         </div>
-        {!matches && <div className="panel empty">启动 API 后加载比赛列表</div>}
+        {!matches && <div className="panel empty">未找到本地 SQLite 数据集</div>}
         {matches && (
           <div className="panel-list">
             {matches.items.map((m) => (

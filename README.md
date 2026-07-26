@@ -1,6 +1,6 @@
 # RMMob
 
-RoboMaster 高校赛（RMUC）数据分析前端：FotMob 风格的比赛叙事，并融合战队 / 兵种入口。
+RMUC 数据分析前端：FotMob 风格的比赛叙事，并融合战队 / 兵种入口。
 
 局内地图、软热力、Momentum、官方同源排行与多校对比；暗色主题。
 
@@ -8,53 +8,33 @@ RoboMaster 高校赛（RMUC）数据分析前端：FotMob 风格的比赛叙事�
 
 | 层级 | 技术 |
 | --- | --- |
-| Web | Next.js（App Router）+ TypeScript |
-| API | FastAPI + NumPy |
-| 存储 | 默认 SQLite；可选 PostgreSQL |
-| 导入 | `pipelines/ingest`：SQLite → PostgreSQL |
+| Web + API | Next.js（App Router）+ TypeScript Route Handlers |
+| 存储 | 本地 SQLite（`better-sqlite3`） |
+| 官方榜 | `services/api/data/robot_data_2026.json` |
+| 可选导入 | `pipelines/ingest`：SQLite → PostgreSQL（独立脚本，非运行时依赖） |
 
 ## 快速开始
 
-### 1. API
+只需 **Node.js 22+**（内置 `node:sqlite`）。无需 Python、无需编译原生模块。
 
 ```bash
-# 在仓库根目录
-python -m venv .venv
+# 仓库根目录需有数据集：
+# rmuc_2026_region_dataset/rmuc_2026_region_dataset.sqlite
 
-# Windows PowerShell
-.\.venv\Scripts\Activate.ps1
-
-# macOS / Linux
-# source .venv/bin/activate
-
-pip install -r services/api/requirements.txt
-cd services/api
-python -m uvicorn app.main:app --reload --port 8000
-```
-
-默认读取：
-
-```text
-rmuc_2026_region_dataset/rmuc_2026_region_dataset.sqlite
-```
-
-导入 Postgres 后可设置环境变量：
-
-```text
-DATABASE_URL=postgresql://rmmob:rmmob@localhost:5432/rmmob
-```
-
-### 2. Web
-
-```bash
 cd apps/web
 npm install
 npm run dev
 ```
 
-打开 [http://localhost:3000](http://localhost:3000)。浏览器请求 `/api/*`，由 Next.js 代理到 FastAPI `:8000`。
+打开 [http://localhost:3000](http://localhost:3000)。`/api/*` 由 Next.js 同进程提供。
 
-### 3. 可选：PostgreSQL 导入
+可选环境变量：
+
+```text
+SQLITE_PATH=D:\path\to\rmuc_2026_region_dataset.sqlite
+```
+
+### 可选：PostgreSQL 导入（离线管道）
 
 ```bash
 docker compose up -d
@@ -64,6 +44,7 @@ python ingest.py \
   --database-url postgresql://rmmob:rmmob@localhost:5432/rmmob
 ```
 
+> 网站运行时当前只读 SQLite；Postgres 导入仅供数据管道使用。
 ## 功能导航
 
 | 页面 | 说明 |
@@ -97,7 +78,7 @@ python ingest.py \
 
 ### 1. Momentum（局内局势）
 
-- **代码：** `services/api/app/services/momentum.py`
+- **代码：** `apps/web/src/server/momentum.ts`（原 Python：`services/api/app/services/momentum.py`）
 - **版本：** `momentum-v1.0`
 - **符号：** 红方优势为正，蓝方为负。基地 / 前哨只进 objective，不进地面 HP / 弹药。
 
@@ -296,10 +277,11 @@ g_y=\left\lfloor\frac{y-y_{\min}}{y_{\mathrm{range}}}\cdot 59\right\rfloor
 ## 仓库结构（简）
 
 ```text
-apps/web/                  Next.js 前端
-services/api/              FastAPI
-services/api/data/         robot_data_2026.json
-pipelines/ingest/          SQLite → PG
+apps/web/                  Next.js 前端 + /api（SQLite）
+apps/web/src/server/       原 FastAPI 业务逻辑（TS）
+services/api/data/         robot_data_2026.json（官方榜）
+services/api/              旧 Python API（可选对照，非运行时依赖）
+pipelines/ingest/          SQLite → PG（可选管道）
 rmuc_2026_region_dataset/  区域赛 SQLite
 assets/                    原始场地图等资源
 ```

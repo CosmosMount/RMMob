@@ -125,3 +125,8 @@ export type StatBar = {
   red: number;
   blue: number;
 };
+
+export type StatisticsResponse = {
+  game_id: string;
+  bars: StatBar[];
+};

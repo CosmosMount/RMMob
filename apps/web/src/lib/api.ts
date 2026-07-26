@@ -1,7 +1,10 @@
-const BASE =
-  typeof window === "undefined"
-    ? process.env.API_INTERNAL_URL || "http://127.0.0.1:8000/api"
-    : "/api";
+const BASE = typeof window === "undefined" ? absoluteApiBase() : "/api";
+
+function absoluteApiBase(): string {
+  if (process.env.API_INTERNAL_URL) return process.env.API_INTERNAL_URL;
+  const port = process.env.PORT || "3000";
+  return `http://127.0.0.1:${port}/api`;
+}
 
 async function get<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
