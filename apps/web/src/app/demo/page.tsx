@@ -99,11 +99,25 @@ function DemoRoundView({ fixture }: { fixture: DemoFixture }) {
   const [team, setTeam] = useState<string | null>(null);
   const [robotType, setRobotType] = useState<string | null>(null);
   const [selectedRobot, setSelectedRobot] = useState<string | null>(null);
-  const [layers, setLayers] = useState({ heat: true, trails: false, robots: true });
+  const [layers, setLayers] = useState({
+    heat: true,
+    trails: false,
+    robots: true,
+    aim: true,
+  });
 
   const snapRobots =
     robotsAtSecond(fixture.snapshots, t.currentSecond, fixture.snapshotStep) ||
     fixture.round.robots;
+
+  const prevSnapRobots =
+    t.currentSecond > 0
+      ? robotsAtSecond(
+          fixture.snapshots,
+          Math.max(0, t.currentSecond - fixture.snapshotStep),
+          fixture.snapshotStep
+        )
+      : null;
 
   const detail: RoundDetail = useMemo(() => {
     const robots = snapRobots;
@@ -210,15 +224,24 @@ function DemoRoundView({ fixture }: { fixture: DemoFixture }) {
         >
           Robots
         </button>
+        <button
+          className={`btn ${layers.aim ? "active" : ""}`}
+          onClick={() => setLayers((l) => ({ ...l, aim: !l.aim }))}
+        >
+          Aim
+        </button>
       </div>
       <TacticalMap
-        robots={mapRobots}
+        robots={displayRobots}
+        prevRobots={prevSnapRobots}
+        focusRobotIds={mapRobots.map((r) => r.robot_id)}
         trajectories={filteredTraj}
         heatmapSamples={heatSamples}
         bounds={DEFAULT_BOUNDS}
         showHeatmap={layers.heat}
         showTrails={layers.trails}
         showRobots={layers.robots}
+        showAim={layers.aim}
       />
     </MatchBattleHud>
   );

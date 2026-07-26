@@ -1,12 +1,19 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   DEFAULT_BOUNDS,
   FIELD_IMAGE_ASPECT,
   worldToMap,
   type Bounds,
 } from "@/lib/coords";
+import {
+  inferAimLinks,
+  isBuildingType,
+  muzzleTipWorld,
+  robotsToMap,
+  yawValid,
+} from "@/lib/aimTarget";
 import { renderSoftHeatmap } from "@/lib/heatmap";
 import { publicUrl } from "@/lib/publicUrl";
 import { robotNumberLabel } from "@/lib/robotLabel";
@@ -14,6 +21,8 @@ import type { HeatmapSample, RobotSnapshot } from "@/lib/types";
 import { useRoundTime } from "@/state/roundTime";
 
 const FIELD_SRC = publicUrl("/field/rmuc_2026_field_top_view.jpeg?v=nobg");
+/** World-meters length of the short muzzle tick (OfflineRL uses ~1.5 m). */
+const MUZZLE_LEN_M = 1.2;
 
 type Traj = {
   robot_id: string;
@@ -23,20 +32,28 @@ type Traj = {
 
 export function TacticalMap({
   robots,
+  prevRobots,
   trajectories,
   heatmapSamples,
   bounds = DEFAULT_BOUNDS,
   showHeatmap,
   showTrails,
   showRobots,
+  showAim = false,
+  focusRobotIds = null,
 }: {
   robots: RobotSnapshot[];
+  /** Prior-second snapshots for ammo-delta fire gate. */
+  prevRobots?: RobotSnapshot[] | null;
   trajectories: Traj[];
   heatmapSamples: HeatmapSample[];
   bounds?: Bounds;
   showHeatmap: boolean;
   showTrails: boolean;
   showRobots: boolean;
+  showAim?: boolean;
+  /** If set, only draw chassis / aim lines for these ids (candidates still use full `robots`). */
+  focusRobotIds?: string[] | null;
 }) {
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const heatRef = useRef<HTMLCanvasElement>(null);
@@ -44,12 +61,24 @@ export function TacticalMap({
   const fieldImg = useRef<HTMLImageElement | null>(null);
   const t = useRoundTime();
 
+  const focusSet = useMemo(
+    () => (focusRobotIds?.length ? new Set(focusRobotIds) : null),
+    [focusRobotIds]
+  );
+
+  const aimLinks = useMemo(() => {
+    if (!showAim) return [];
+    const prev = prevRobots?.length ? robotsToMap(prevRobots) : null;
+    const links = inferAimLinks(robots, prev);
+    if (!focusSet) return links;
+    return links.filter((l) => focusSet.has(l.shooterId));
+  }, [robots, prevRobots, showAim, focusSet]);
+
   useEffect(() => {
     const img = new Image();
     img.src = FIELD_SRC;
     img.onload = () => {
       fieldImg.current = img;
-      // trigger overlay redraw via custom event on wrap
       wrapRef.current?.dispatchEvent(new Event("field-ready"));
     };
   }, []);
@@ -105,21 +134,82 @@ export function TacticalMap({
         }
       }
 
+      // Aim lines (before chassis so dots sit on top)
+      if (showAim) {
+        for (const link of aimLinks) {
+          const a = worldToMap(link.fromX, link.fromY, w, h, bounds);
+          const b = worldToMap(link.toX, link.toY, w, h, bounds);
+          const col = link.shooterTeam === "红" ? "#e85d5d" : "#5b8def";
+          ctx.beginPath();
+          ctx.setLineDash(link.firing ? [5, 3] : [4, 5]);
+          ctx.moveTo(a.X, a.Y);
+          ctx.lineTo(b.X, b.Y);
+          ctx.strokeStyle = col;
+          ctx.globalAlpha = link.firing ? 0.95 : 0.45 + 0.4 * link.conf;
+          ctx.lineWidth = link.firing ? 2.4 : 1.5;
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+
+          // Target mark
+          ctx.beginPath();
+          ctx.arc(b.X, b.Y, isBuildingType(link.targetType) ? 7 : 5, 0, Math.PI * 2);
+          ctx.strokeStyle = col;
+          ctx.lineWidth = link.firing ? 2 : 1.5;
+          ctx.stroke();
+          if (isBuildingType(link.targetType)) {
+            ctx.beginPath();
+            ctx.moveTo(b.X - 5, b.Y);
+            ctx.lineTo(b.X + 5, b.Y);
+            ctx.moveTo(b.X, b.Y - 5);
+            ctx.lineTo(b.X, b.Y + 5);
+            ctx.stroke();
+          }
+
+          ctx.fillStyle = col;
+          ctx.font = "600 10px system-ui, sans-serif";
+          ctx.textAlign = "left";
+          ctx.textBaseline = "bottom";
+          ctx.globalAlpha = 0.9;
+          ctx.fillText(link.targetLabel, b.X + 8, b.Y - 4);
+          ctx.globalAlpha = 1;
+        }
+      }
+
       if (showRobots) {
         for (const r of robots) {
-          if (r.robot_type === "基地" || r.robot_type === "前哨站") continue;
+          if (isBuildingType(r.robot_type)) continue;
+          if (focusSet && !focusSet.has(r.robot_id)) continue;
           if (r.x == null || r.y == null) continue;
           const { X, Y } = worldToMap(r.x, r.y, w, h, bounds);
           const label = robotNumberLabel(r.robot_id);
-          if (r.orientation != null) {
-            const rad = ((90 - r.orientation) * Math.PI) / 180;
+          const firing = aimLinks.some(
+            (l) => l.shooterId === r.robot_id && l.firing
+          );
+
+          if (firing) {
             ctx.beginPath();
-            ctx.moveTo(X + Math.cos(rad) * 8, Y - Math.sin(rad) * 8);
-            ctx.lineTo(X + Math.cos(rad) * 16, Y - Math.sin(rad) * 16);
-            ctx.strokeStyle = r.team === "红" ? "#e85d5d" : "#5b8def";
+            ctx.arc(X, Y, 14, 0, Math.PI * 2);
+            ctx.strokeStyle =
+              r.team === "红" ? "rgba(232,93,93,0.85)" : "rgba(91,141,239,0.85)";
             ctx.lineWidth = 2;
             ctx.stroke();
           }
+
+          // OfflineRL muzzle: world tip then project
+          if (yawValid(r.orientation)) {
+            const tip = muzzleTipWorld(r.x, r.y, r.orientation!, MUZZLE_LEN_M);
+            const T = worldToMap(tip.x, tip.y, w, h, bounds);
+            ctx.beginPath();
+            ctx.moveTo(X, Y);
+            ctx.lineTo(T.X, T.Y);
+            ctx.strokeStyle = r.team === "红" ? "#e85d5d" : "#5b8def";
+            ctx.globalAlpha = 0.7;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
+
           ctx.beginPath();
           ctx.arc(X, Y, 9, 0, Math.PI * 2);
           ctx.fillStyle = r.team === "红" ? "#d64545" : "#3b6fd9";
@@ -144,9 +234,18 @@ export function TacticalMap({
       wrap.removeEventListener("field-ready", draw);
       ro.disconnect();
     };
-  }, [robots, trajectories, t.currentSecond, showTrails, showRobots, bounds]);
+  }, [
+    robots,
+    trajectories,
+    t.currentSecond,
+    showTrails,
+    showRobots,
+    showAim,
+    aimLinks,
+    bounds,
+    focusSet,
+  ]);
 
-  // Re-render heat on resize
   useEffect(() => {
     const wrap = wrapRef.current;
     if (!wrap || !showHeatmap) return;
@@ -180,6 +279,9 @@ export function TacticalMap({
         <canvas ref={overlayRef} className="field-layer field-overlay" aria-hidden />
       </div>
       <div className="map-caption muted">
+        {showAim
+          ? "瞄准由枪口朝向推断（含前哨/基地）· "
+          : ""}
         LADDER 60×60 · FotMob touch blobs · {bounds.xMax}×{bounds.yMax}m
       </div>
     </section>

@@ -115,7 +115,13 @@ function MatchRoundView({ gameId, matchKey }: { gameId: string; matchKey: string
   const [team, setTeam] = useState<string | null>(null);
   const [robotType, setRobotType] = useState<string | null>(null);
   const [selectedRobot, setSelectedRobot] = useState<string | null>(null);
-  const [layers, setLayers] = useState({ heat: true, trails: false, robots: true });
+  const [layers, setLayers] = useState({
+    heat: true,
+    trails: false,
+    robots: true,
+    aim: true,
+  });
+  const [prevRobots, setPrevRobots] = useState<RobotSnapshot[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +130,7 @@ function MatchRoundView({ gameId, matchKey }: { gameId: string; matchKey: string
       if (cancelled) return;
       distanceMap.current = Object.fromEntries(d.robots.map((r) => [r.robot_id, r.distance]));
       setDetail(d);
+      setPrevRobots([]);
       const [m, ev, st, robots] = await Promise.all([
         api.momentum(gameId),
         api.events(gameId),
@@ -162,15 +169,19 @@ function MatchRoundView({ gameId, matchKey }: { gameId: string; matchKey: string
     let cancelled = false;
     const delay = t.isPlaying ? 280 : 80;
     const handle = window.setTimeout(() => {
-      api
-        .round(gameId, t.currentSecond)
-        .then((d) => {
+      const sec = t.currentSecond;
+      Promise.all([
+        api.round(gameId, sec),
+        sec > 0 ? api.round(gameId, sec - 1) : Promise.resolve(null),
+      ])
+        .then(([d, prev]) => {
           if (cancelled) return;
           d.robots = d.robots.map((r) => ({
             ...r,
             distance: distanceMap.current[r.robot_id] ?? r.distance,
           }));
           setDetail(d);
+          setPrevRobots(prev?.robots ?? []);
         })
         .catch(() => {});
     }, delay);
@@ -274,15 +285,24 @@ function MatchRoundView({ gameId, matchKey }: { gameId: string; matchKey: string
         >
           Robots
         </button>
+        <button
+          className={`btn ${layers.aim ? "active" : ""}`}
+          onClick={() => setLayers((l) => ({ ...l, aim: !l.aim }))}
+        >
+          Aim
+        </button>
       </div>
       <TacticalMap
-        robots={mapRobots}
+        robots={displayRobots}
+        prevRobots={prevRobots}
+        focusRobotIds={mapRobots.map((r) => r.robot_id)}
         trajectories={filteredTraj}
         heatmapSamples={heat?.samples || []}
         bounds={heat?.coordinate_bounds}
         showHeatmap={layers.heat}
         showTrails={layers.trails}
         showRobots={layers.robots}
+        showAim={layers.aim}
       />
     </MatchBattleHud>
   );
