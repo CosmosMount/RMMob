@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import logos from "@/data/college_logos.json";
+import { publicUrl } from "@/lib/publicUrl";
 
 type Props = {
   school: string;
@@ -19,7 +20,7 @@ function initials(school: string): string {
 }
 
 function resolveLogo(school: string): string | null {
-  if (LOGO_MAP[school]) return LOGO_MAP[school];
+  if (LOGO_MAP[school]) return publicUrl(LOGO_MAP[school]);
   // fuzzy: longest key contained in school or vice versa
   let best: string | null = null;
   let bestLen = 0;
@@ -31,7 +32,7 @@ function resolveLogo(school: string): string | null {
       }
     }
   }
-  return best;
+  return best ? publicUrl(best) : null;
 }
 
 export function SchoolCrest({

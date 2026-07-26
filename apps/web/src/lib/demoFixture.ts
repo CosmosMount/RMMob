@@ -7,6 +7,7 @@ import type {
   RoundDetail,
   StatBar,
 } from "@/lib/types";
+import { publicUrl } from "@/lib/publicUrl";
 
 export type DemoMeta = {
   title: string;
@@ -45,16 +46,8 @@ export type DemoFixture = {
   snapshotStep: number;
 };
 
-function basePrefix(): string {
-  // next.js injects basePath into asset requests; for fetch use env or empty
-  if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_BASE_PATH) {
-    return process.env.NEXT_PUBLIC_BASE_PATH.replace(/\/$/, "");
-  }
-  return "";
-}
-
 async function getJson<T>(file: string): Promise<T> {
-  const res = await fetch(`${basePrefix()}/demo-data/${file}`, { cache: "force-cache" });
+  const res = await fetch(publicUrl(`/demo-data/${file}`), { cache: "force-cache" });
   if (!res.ok) throw new Error(`Failed to load demo-data/${file}: ${res.status}`);
   return res.json() as Promise<T>;
 }

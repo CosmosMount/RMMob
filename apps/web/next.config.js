@@ -6,6 +6,9 @@ const basePath = (process.env.BASE_PATH || process.env.NEXT_PUBLIC_BASE_PATH || 
 );
 
 const nextConfig = {
+  env: {
+    NEXT_PUBLIC_BASE_PATH: basePath,
+  },
   ...(isStatic
     ? {
         output: "export",
@@ -17,9 +20,6 @@ const nextConfig = {
               assetPrefix: basePath,
             }
           : {}),
-        env: {
-          NEXT_PUBLIC_BASE_PATH: basePath,
-        },
       }
     : {}),
 };

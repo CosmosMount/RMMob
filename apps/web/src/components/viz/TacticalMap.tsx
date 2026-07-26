@@ -8,11 +8,12 @@ import {
   type Bounds,
 } from "@/lib/coords";
 import { renderSoftHeatmap } from "@/lib/heatmap";
+import { publicUrl } from "@/lib/publicUrl";
 import { robotNumberLabel } from "@/lib/robotLabel";
 import type { HeatmapSample, RobotSnapshot } from "@/lib/types";
 import { useRoundTime } from "@/state/roundTime";
 
-const FIELD_SRC = "/field/rmuc_2026_field_top_view.jpeg?v=nobg";
+const FIELD_SRC = publicUrl("/field/rmuc_2026_field_top_view.jpeg?v=nobg");
 
 type Traj = {
   robot_id: string;
