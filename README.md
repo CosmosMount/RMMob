@@ -9,7 +9,7 @@ RMUC 数据分析前端：FotMob 风格的比赛叙事，并融合战队 / 兵�
 | 层级 | 技术 |
 | --- | --- |
 | Web + API | Next.js（App Router）+ TypeScript Route Handlers |
-| 存储 | 本地 SQLite（`better-sqlite3`） |
+| 存储 | 本地 SQLite（Node 内置 `node:sqlite`） |
 | 官方榜 | `services/api/data/robot_data_2026.json` |
 | 可选导入 | `pipelines/ingest`：SQLite → PostgreSQL（独立脚本，非运行时依赖） |
 
@@ -26,12 +26,31 @@ npm install
 npm run dev
 ```
 
-打开 [http://localhost:3000](http://localhost:3000)。`/api/*` 由 Next.js 同进程提供。
+打开 [http://localhost:3000](http://localhost:3000)。`/api/*` 由 Next.js 同进程提供。本地也可打开 [/demo](http://localhost:3000/demo) 查看静态单场 Demo。
 
 可选环境变量：
 
 ```text
 SQLITE_PATH=D:\path\to\rmuc_2026_region_dataset.sqlite
+```
+
+### GitHub Pages 单场 Demo
+
+仓库已预烘焙一场比赛到 `apps/web/public/demo-data/`，静态页路径为 `/demo`（完整播放 / 热力 / Momentum / 血条，无后端）。
+
+**发布：**
+
+1. GitHub → Settings → Pages → Source 选 **GitHub Actions**
+2. 推送 `main`（或手动跑 workflow `Deploy GitHub Pages demo`）
+3. 访问 `https://<user>.github.io/<repo>/demo/`（`BASE_PATH` 自动用仓库名）
+
+**本地更新 fixture / 预览静态站：**
+
+```bash
+cd apps/web
+npm run export:demo                  # 可选：--game-id=... --snapshot-step=2
+npm run build:pages                  # 产出 apps/web/out
+npx serve out                        # 本地预览
 ```
 
 ### 可选：PostgreSQL 导入（离线管道）
@@ -45,10 +64,12 @@ python ingest.py \
 ```
 
 > 网站运行时当前只读 SQLite；Postgres 导入仅供数据管道使用。
+
 ## 功能导航
 
 | 页面 | 说明 |
 | --- | --- |
+| Demo | GitHub Pages 静态单场完整局（预烘焙数据） |
 | 首页 | 中间赛程；左侧学校积分榜；右侧兵种榜（可切换兵种） |
 | Matches | 赛区筛选 + 学校下拉搜索；局详情（播放 / 热力 / 血条 HUD） |
 | Teams | 学校检索与赛季概览 |
@@ -279,6 +300,8 @@ g_y=\left\lfloor\frac{y-y_{\min}}{y_{\mathrm{range}}}\cdot 59\right\rfloor
 ```text
 apps/web/                  Next.js 前端 + /api（SQLite）
 apps/web/src/server/       原 FastAPI 业务逻辑（TS）
+apps/web/public/demo-data/ GitHub Pages 单场预烘焙数据
+apps/web/src/app/demo/     静态 Demo 页
 services/api/data/         robot_data_2026.json（官方榜）
 services/api/              旧 Python API（可选对照，非运行时依赖）
 pipelines/ingest/          SQLite → PG（可选管道）

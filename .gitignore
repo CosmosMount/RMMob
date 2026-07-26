@@ -6,6 +6,8 @@ node_modules/
 .next/
 out/
 dist/
+.pages-api-backup/
+.pages-build-backup/
 .venv/
 __pycache__/
 *.py[cod]

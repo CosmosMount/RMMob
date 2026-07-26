@@ -1,10 +1,16 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { HomeTypeRankPanel } from "@/components/home/HomeTypeRankPanel";
 import { MatchRow } from "@/components/match/MatchRow";
 import { SchoolCrest } from "@/components/match/SchoolCrest";
-import { listMatches, schoolStandings } from "@/server/matches";
 
 export default async function HomePage() {
+  if (process.env.STATIC_EXPORT === "1") {
+    redirect("/demo");
+  }
+
+  const { listMatches, schoolStandings } = await import("@/server/matches");
+
   let matches: ReturnType<typeof listMatches> | null = null;
   let standings: { items: ReturnType<typeof schoolStandings> } | null = null;
 
@@ -42,7 +48,10 @@ export default async function HomePage() {
                   <tr key={s.school}>
                     <td className="num muted">{s.rank}</td>
                     <td>
-                      <Link href={`/teams/${encodeURIComponent(s.school)}`} className="home-school-link">
+                      <Link
+                        href={`/teams/${encodeURIComponent(s.school)}`}
+                        className="home-school-link"
+                      >
                         <SchoolCrest school={s.school} size={22} />
                         <span className="home-school-name">{s.school}</span>
                       </Link>

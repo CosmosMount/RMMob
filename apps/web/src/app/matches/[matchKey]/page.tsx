@@ -1,7 +1,9 @@
-"use client";
-
 import { Suspense } from "react";
 import MatchDetailInner from "./MatchDetailInner";
+
+export function generateStaticParams() {
+  return [] as Array<{ matchKey: string }>;
+}
 
 export default function MatchDetailPage() {
   return (
